@@ -64,20 +64,26 @@ def get_news(query, num=15):
 
     unique_by_url = {}
     for q_idx, q in enumerate(queries):
+        # Добавляем задержку между запросами для соблюдения лимитов NewsAPI
+        if q_idx > 0:
+            import time
+            delay = 2  # 2 секунды задержки между запросами
+            print(f"  Ждем {delay} сек перед следующим запросом...")
+            time.sleep(delay)
         if len(unique_by_url) >= num:
             print(f"Достигнут лимит статей ({num}), останавливаю поиск")
             break
             
         print(f"\nЗапрос {q_idx+1}/{len(queries)}: {q[:60]}{'...' if len(q) > 60 else ''}")
         
-        for page in range(1, 4):
+        for page in range(1, 2):  # Только 1 страница для экономии запросов
             params = {
                 "apiKey": NEWSAPI_KEY,
                 "q": q,
                 "language": "ru",
                 "sortBy": "publishedAt",
                 "searchIn": "title,description,content",
-                "pageSize": 100,
+                "pageSize": 50,  # Уменьшено до 50 для бесплатного тарифа
                 "page": page,
                 "from": from_date,
                 "to": to_date
@@ -87,7 +93,40 @@ def get_news(query, num=15):
                 data = response.json()
                 
                 if response.status_code != 200:
-                    print(f"  Страница {page}: Ошибка API - {response.status_code}: {data.get('message', 'Unknown error')}")
+                    error_msg = data.get('message', 'Unknown error')
+                    print(f"  Страница {page}: Ошибка API - {response.status_code}: {error_msg}")
+
+                    # Специальная обработка для бесплатного тарифа
+                    if response.status_code == 426 and 'too many results' in error_msg.lower():
+                        print(f"  Достигнут лимит бесплатного тарифа NewsAPI. Пропускаю оставшиеся страницы.")
+                        break  # Прерываем цикл страниц для этого запроса
+
+                    # Обработка ошибки 429 (Too Many Requests)
+                    if response.status_code == 429:
+                        import time
+                        wait_time = 60  # Ждем 1 минуту перед повтором
+                        print(f"  Превышен лимит запросов. Ждем {wait_time} сек...")
+                        time.sleep(wait_time)
+                        # Повторяем запрос
+                        response = requests.get(url, params=params, timeout=20)
+                        if response.status_code == 200:
+                            data = response.json()
+                            articles = data.get("articles", [])
+                            print(f"  Повторный запрос: найдено {len(articles)} статей")
+                            # Продолжаем обработку статей...
+                            for item in articles:
+                                url_val = item.get("url")
+                                if not url_val or url_val in unique_by_url:
+                                    continue
+                                unique_by_url[url_val] = {
+                                    "title": item.get("title", ""),
+                                    "description": item.get("description", ""),
+                                    "url": url_val
+                                }
+                                if len(unique_by_url) >= num:
+                                    break
+                        continue
+
                     continue
                     
                 articles = data.get("articles", [])
@@ -120,14 +159,22 @@ def get_news(query, num=15):
         for q_idx, q in enumerate(queries):
             if len(unique_by_url) >= num:
                 break
-            for page in range(1, 3):
+
+            # Задержка между фоллбэк-запросами
+            if q_idx > 0:
+                import time
+                delay = 2
+                print(f"  Фоллбэк: ждем {delay} сек перед следующим запросом...")
+                time.sleep(delay)
+
+            for page in range(1, 2):  # Только 1 страница для фоллбэка
                 params = {
                     "apiKey": NEWSAPI_KEY,
                     "q": q,
                     "language": "ru",
                     "sortBy": "relevancy",
                     "searchIn": "title,description,content",
-                    "pageSize": 100,
+                    "pageSize": 50,  # Уменьшено до 50 для бесплатного тарифа
                     "page": page,
                     "from": from_date,
                     "to": to_date
@@ -137,6 +184,14 @@ def get_news(query, num=15):
                     data = response.json()
                     
                     if response.status_code != 200:
+                        error_msg = data.get('message', 'Unknown error')
+                        print(f"  Фоллбэк запрос {q_idx+1}, страница {page}: Ошибка API - {response.status_code}: {error_msg}")
+
+                        # Специальная обработка для бесплатного тарифа
+                        if response.status_code == 426 and 'too many results' in error_msg.lower():
+                            print(f"  Достигнут лимит бесплатного тарифа NewsAPI. Пропускаю оставшиеся страницы.")
+                            break  # Прерываем цикл страниц для этого запроса
+
                         continue
                         
                     articles = data.get("articles", [])
