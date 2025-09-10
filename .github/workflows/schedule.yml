@@ -29,5 +29,6 @@ jobs:
         OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
         NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
         TG_TOKEN: ${{ secrets.TG_TOKEN }}
-        CHAT_ID: ${{ secrets.CHAT_ID }}
+        CHAT_ID_1: ${{ secrets.CHAT_ID_1 }}
+        CHAT_ID_2: ${{ secrets.CHAT_ID_2 }}
       run: python didjest.py
