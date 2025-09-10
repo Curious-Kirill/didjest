@@ -12,6 +12,8 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
 TG_TOKEN = os.getenv("TG_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
+CHAT_ID_1 = os.getenv("CHAT_ID_1")
+CHAT_ID_2 = os.getenv("CHAT_ID_2")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -294,16 +296,23 @@ def _split_for_telegram(text: str, limit: int = 4000):
             start = end
     return [p for p in (s.strip() for s in parts) if p]
 
-def send_telegram_message(text: str):
-    if not TG_TOKEN or not CHAT_ID:
-        print("Telegram: пропущено (нет TG_TOKEN или CHAT_ID)")
+def send_telegram_message(text: str, chat_id: str = None):
+    if not TG_TOKEN:
+        print("Telegram: пропущено (нет TG_TOKEN)")
         return
+
+    # Используем переданный chat_id или CHAT_ID из .env
+    target_chat_id = chat_id or CHAT_ID
+    if not target_chat_id:
+        print("Telegram: пропущено (нет chat_id)")
+        return
+
     api_url = f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage"
     for idx, chunk in enumerate(_split_for_telegram(text), start=1):
         resp = requests.post(
             api_url,
             data={
-                "chat_id": CHAT_ID,
+                "chat_id": target_chat_id,
                 "text": chunk,
                 "disable_web_page_preview": True,
             },
@@ -311,7 +320,7 @@ def send_telegram_message(text: str):
         )
         if not resp.ok:
             raise RuntimeError(f"Telegram error: {resp.status_code} {resp.text}")
-        print(f"Telegram: отправлен фрагмент {idx}")
+        print(f"Telegram (chat {target_chat_id}): отправлен фрагмент {idx}")
 
 # 3. Запуск
 if __name__ == "__main__":
@@ -324,7 +333,11 @@ if __name__ == "__main__":
         report_with_links = replace_citation_brackets_with_urls(report, index_to_url)
         print(report_with_links)
         try:
-            send_telegram_message(report_with_links)
-            print("Дайджест отправлен в Telegram.")
+            # Отправка в оба чата через переменные окружения
+            if CHAT_ID_1:
+                send_telegram_message(report_with_links, CHAT_ID_1)
+            if CHAT_ID_2:
+                send_telegram_message(report_with_links, CHAT_ID_2)
+            print("Дайджест отправлен в настроенные Telegram чаты.")
         except Exception as e:
             print(f"Ошибка отправки в Telegram: {e}")
